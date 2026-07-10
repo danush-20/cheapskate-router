@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "practice-01",
+    "answer": "The capital of Australia is Canberra, and it is situated on the banks of Lake Burley Griffin."
+  },
+  {
+    "task_id": "practice-02",
+    "answer": "144\n\n15% of 240 = 36 items sold Monday; plus 60 on Tuesday = 96 total sold. 240 \u2212 96 = 144 remaining."
+  },
+  {
+    "task_id": "practice-03",
+    "answer": "Mixed"
+  },
+  {
+    "task_id": "practice-04",
+    "answer": "No sample paragraph was provided for me to summarize."
+  },
+  {
+    "task_id": "practice-05",
+    "answer": "Maria Sanchez \u2014 PERSON\nFireworks AI \u2014 ORGANIZATION\nBerlin \u2014 LOCATION\nlast March \u2014 DATE"
+  },
+  {
+    "task_id": "practice-06",
+    "answer": "```python\ndef get_max(nums):\n    return max(nums)\n```"
+  },
+  {
+    "task_id": "practice-07",
+    "answer": "Sam owns the cat.\nSam cannot have the bird (given). Jo owns the dog (given). Therefore, Sam must own the cat."
+  },
+  {
+    "task_id": "practice-08",
+    "answer": "```python\ndef second_largest(numbers):\n    unique = sorted(set(numbers))\n    if len(unique) < 2:\n        return None\n    return unique[-2]\n```"
+  }
+]

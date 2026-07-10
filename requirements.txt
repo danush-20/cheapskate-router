@@ -1,0 +1,3 @@
+openai
+python-dotenv
+llama-cpp-python

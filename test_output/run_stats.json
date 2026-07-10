@@ -1,0 +1,55 @@
+{
+  "prompt_tokens": 1453,
+  "completion_tokens": 974,
+  "total_tokens": 2427,
+  "retried_count": 1,
+  "local_counts": {},
+  "by_category": {
+    "factual": {
+      "prompt": 169,
+      "completion": 109,
+      "total": 278
+    },
+    "math": {
+      "prompt": 187,
+      "completion": 69,
+      "total": 256
+    },
+    "sentiment": {
+      "prompt": 178,
+      "completion": 25,
+      "total": 203
+    },
+    "summarization": {
+      "prompt": 170,
+      "completion": 150,
+      "total": 320
+    },
+    "summarization_retry": {
+      "prompt": 181,
+      "completion": 225,
+      "total": 406
+    },
+    "ner": {
+      "prompt": 201,
+      "completion": 32,
+      "total": 233
+    },
+    "code_debugging": {
+      "prompt": 87,
+      "completion": 108,
+      "total": 195
+    },
+    "logic": {
+      "prompt": 202,
+      "completion": 69,
+      "total": 271
+    },
+    "code_generation": {
+      "prompt": 78,
+      "completion": 187,
+      "total": 265
+    }
+  },
+  "sowing_capturing_trace": []
+}
