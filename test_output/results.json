@@ -1,0 +1,34 @@
+[
+  {
+    "task_id": "practice-01",
+    "answer": "The capital of Australia is **Canberra**, and it is situated along **Lake Burley Griffin**, an artificial lake in the center of the city created by damming the Molonglo River in 1963."
+  },
+  {
+    "task_id": "practice-02",
+    "answer": "144 items remain."
+  },
+  {
+    "task_id": "practice-03",
+    "answer": "Mixed \u2014 positive on battery life, negative on screen durability."
+  },
+  {
+    "task_id": "practice-04",
+    "answer": "It looks like the paragraph was left as a placeholder rather than actual text. Could you paste the paragraph you'd like summarized?"
+  },
+  {
+    "task_id": "practice-05",
+    "answer": "- Maria Sanchez \u2014 PERSON\n- Fireworks AI \u2014 ORGANIZATION\n- Berlin \u2014 LOCATION\n- last March \u2014 DATE"
+  },
+  {
+    "task_id": "practice-06",
+    "answer": "```python\ndef get_max(nums):\n    return max(nums)\n```\n\nBug: `nums[0]` returns only the first element. Use `max(nums)` to return the largest element."
+  },
+  {
+    "task_id": "practice-07",
+    "answer": "Sam owns the cat.\n\nReasoning:\n- Jo owns the dog.\n- Sam does not own the bird, so Sam must own either the cat or the dog. Since Jo has the dog, **Sam owns the cat**.\n- This leaves Lee with the bird."
+  },
+  {
+    "task_id": "practice-08",
+    "answer": "```python\ndef second_largest(numbers):\n    unique = sorted(set(numbers), reverse=True)\n    if len(unique) < 2:\n        return None\n    return unique[1]\n```"
+  }
+]
