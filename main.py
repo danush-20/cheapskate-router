@@ -2,13 +2,15 @@ import ast
 import json
 import os
 import re
+import sys
+import traceback
 from dotenv import load_dotenv
 from openai import OpenAI
 
 load_dotenv()  # only affects local dev; harness injects real env vars at eval time
 
-INPUT_PATH = os.environ.get("INPUT_PATH", "test_input/tasks.json")
-OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "test_output/results.json")
+INPUT_PATH = os.environ.get("INPUT_PATH", "/input/tasks.json")
+OUTPUT_PATH = os.environ.get("OUTPUT_PATH", "/output/results.json")
 
 MODEL_PREFIX = "accounts/fireworks/models/"
 
@@ -35,7 +37,6 @@ SYSTEM_PROMPT = (
     "Justify answers briefly only where justification is needed."
 )
 
-# Extra instruction appended for specific categories known to need stricter guidance.
 CATEGORY_INSTRUCTIONS = {
     "ner": (
         "Extract EVERY named entity in the text, including PERSON, ORGANIZATION, "
@@ -57,7 +58,6 @@ CODE_BLOCK_RE = re.compile(r"```(?:python)?\s*\n(.*?)```", re.DOTALL)
 
 def classify_category(prompt: str) -> str:
     p = prompt.lower()
-
     if "sentiment" in p or "classify the sentiment" in p:
         return "sentiment"
     if "summar" in p:
@@ -72,7 +72,7 @@ def classify_category(prompt: str) -> str:
         return "math"
     if "each own" in p or "who owns" in p or ("different" in p and "own" in p):
         return "logic"
-    return "factual"  # default fallback
+    return "factual"
 
 
 def build_system_prompt(category: str) -> str:
@@ -90,30 +90,24 @@ def get_client():
 
 
 def resolve_model(category: str, allowed_models: list[str]) -> str:
-    """Pick the mapped model for this category, falling back to the first
-    allowed model if the mapped one isn't actually in ALLOWED_MODELS."""
     desired_short_name = CATEGORY_MODEL_MAP.get(category)
     desired_full_id = f"{MODEL_PREFIX}{desired_short_name}" if desired_short_name else None
 
     if desired_full_id and desired_full_id in allowed_models:
         return desired_full_id
 
-    # Fallback: match by short name if allowed_models entries are already full IDs
     for m in allowed_models:
         if desired_short_name and desired_short_name in m:
             return m
 
-    # Last resort: first allowed model
     return allowed_models[0]
 
 
 def extract_code_blocks(answer: str) -> list[str]:
-    """Pull out all fenced code blocks from a markdown-style answer."""
     return CODE_BLOCK_RE.findall(answer)
 
 
 def is_valid_python(code: str) -> bool:
-    """Zero-token, local check: does this code parse as valid Python?"""
     try:
         ast.parse(code)
         return True
@@ -122,8 +116,6 @@ def is_valid_python(code: str) -> bool:
 
 
 def answer_has_valid_code(answer: str) -> bool:
-    """For code-category answers, all code blocks found must parse cleanly.
-    If no code block is found at all, treat as invalid (something's off)."""
     blocks = extract_code_blocks(answer)
     if not blocks:
         return False
@@ -131,7 +123,7 @@ def answer_has_valid_code(answer: str) -> bool:
 
 
 def call_model(client, model, system_prompt, user_prompt):
-    response = client.chat.completions.create(
+    return client.chat.completions.create(
         model=model,
         messages=[
             {"role": "system", "content": system_prompt},
@@ -139,67 +131,83 @@ def call_model(client, model, system_prompt, user_prompt):
         ],
         reasoning_effort="low",
     )
-    return response
 
 
-def main():
-    client = get_client()
-    allowed_models = [m.strip() for m in os.environ["ALLOWED_MODELS"].split(",")]
+def process_task(client, task, allowed_models):
+    """Process a single task. Never raises — always returns a result dict,
+    falling back to a safe placeholder answer if anything goes wrong."""
+    task_id = task.get("task_id", "unknown")
+    prompt = task.get("prompt", "")
 
-    with open(INPUT_PATH, "r") as f:
-        tasks = json.load(f)
-
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_tokens = 0
-    retries_used = 0
-
-    results = []
-    for task in tasks:
-        category = classify_category(task["prompt"])
+    try:
+        category = classify_category(prompt)
         model = resolve_model(category, allowed_models)
         system_prompt = build_system_prompt(category)
 
-        response = call_model(client, model, system_prompt, task["prompt"])
-        answer = response.choices[0].message.content
+        response = call_model(client, model, system_prompt, prompt)
+        answer = response.choices[0].message.content or ""
 
-        usage = getattr(response, "usage", None)
-        if usage:
-            total_input_tokens += usage.prompt_tokens
-            total_output_tokens += usage.completion_tokens
-            total_tokens += usage.total_tokens
-
-        retried = False
-        # Local, zero-token validation: for code tasks, verify syntax and
-        # retry once (one extra Fireworks call) if it's broken.
         if category in CODE_CATEGORIES and not answer_has_valid_code(answer):
-            retried = True
-            retries_used += 1
-            retry_prompt = task["prompt"] + RETRY_INSTRUCTION
+            retry_prompt = prompt + RETRY_INSTRUCTION
             response = call_model(client, model, system_prompt, retry_prompt)
-            answer = response.choices[0].message.content
+            retried_answer = response.choices[0].message.content
+            if retried_answer:
+                answer = retried_answer
 
-            usage = getattr(response, "usage", None)
-            if usage:
-                total_input_tokens += usage.prompt_tokens
-                total_output_tokens += usage.completion_tokens
-                total_tokens += usage.total_tokens
+        if not answer.strip():
+            answer = "No answer could be generated for this task."
 
-        results.append({"task_id": task["task_id"], "answer": answer})
+        return {"task_id": task_id, "answer": answer}
 
-        tag = " [retried]" if retried else ""
-        print(f"{task['task_id']:<15} category={category:<15} model={model} "
-              f"tokens={usage.total_tokens if usage else 'n/a'}{tag}")
+    except Exception as e:
+        # Never let a single task's failure crash the whole run.
+        print(f"[WARN] Task {task_id} failed: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        return {"task_id": task_id, "answer": "Error: could not generate an answer for this task."}
 
-    os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
-    with open(OUTPUT_PATH, "w") as f:
-        json.dump(results, f, indent=2)
 
-    print("\n--- Token summary ---")
-    print(f"Input tokens:  {total_input_tokens}")
-    print(f"Output tokens: {total_output_tokens}")
-    print(f"Total tokens:  {total_tokens}")
-    print(f"Code retries:  {retries_used}")
+def main():
+    try:
+        allowed_models = [m.strip() for m in os.environ["ALLOWED_MODELS"].split(",") if m.strip()]
+        if not allowed_models:
+            raise ValueError("ALLOWED_MODELS is empty")
+        client = get_client()
+    except Exception as e:
+        print(f"[FATAL] Could not initialize client/config: {e}", file=sys.stderr)
+        # Still try to write an empty-but-valid output before exiting non-zero,
+        # in case the harness inspects the file regardless of exit code.
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+        with open(OUTPUT_PATH, "w") as f:
+            json.dump([], f)
+        sys.exit(1)
+
+    try:
+        with open(INPUT_PATH, "r") as f:
+            tasks = json.load(f)
+        if not isinstance(tasks, list):
+            raise ValueError("tasks.json must contain a JSON array")
+    except Exception as e:
+        print(f"[FATAL] Could not read/parse {INPUT_PATH}: {e}", file=sys.stderr)
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+        with open(OUTPUT_PATH, "w") as f:
+            json.dump([], f)
+        sys.exit(1)
+
+    results = []
+    for task in tasks:
+        result = process_task(client, task, allowed_models)
+        results.append(result)
+        print(f"{result['task_id']:<15} done")
+
+    try:
+        os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
+        with open(OUTPUT_PATH, "w") as f:
+            json.dump(results, f, indent=2)
+    except Exception as e:
+        print(f"[FATAL] Could not write {OUTPUT_PATH}: {e}", file=sys.stderr)
+        sys.exit(1)
+
+    print(f"\nWrote {len(results)} results to {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
